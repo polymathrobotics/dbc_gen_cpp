@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>dbc_gen_cpp</name>
+  <version>0.0.1</version>
+  <description>Generate C++ types for CAN messages from a DBC</description>
+  <maintainer email="engineering@polymathrobotics.com">Polymath Robotics Engineering</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <exec_depend>python3-cantools-pip</exec_depend>
+  <exec_depend>python3-jinja2</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

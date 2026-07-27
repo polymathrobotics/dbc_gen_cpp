@@ -1,0 +1,127 @@
+{# Note: This .j2 template is NOT auto-generated, but the comment below must appear in generated output files. #}
+// This file was auto-generated from can.hpp.j2 by dbc_gen_cpp
+
+#pragma once
+
+#include <linux/can.h>
+
+#include <cstdint>
+#include <stdexcept>
+
+#include "{{ library_name }}/{{ c_header }}"
+
+namespace {{ library_name }}
+{
+
+{% for message in messages %}
+struct {{ message.name }}
+{
+  static constexpr uint32_t Id = {{ message.can_id }};
+  static constexpr uint8_t DataLength = {{ message.data_length }};
+
+  // Frame format constants
+  static constexpr bool IsJ1939 = {{ 'true' if message.protocol == 'j1939' else 'false' }};
+  static constexpr bool IsExtendedFrame = {{ 'true' if message.is_extended_frame else 'false' }};
+  {% if message.protocol == 'j1939' %}
+  // PGN, Priority, Source Address, and PDU type only generate for J1939 messages
+  static constexpr uint32_t Pgn = {{ message.j1939.pgn }};
+  static constexpr uint8_t DefaultPriority = {{ message.j1939.priority }};
+  static constexpr uint8_t SourceAddress = {{ message.j1939.source_address }};
+  static constexpr bool IsPduBroadcast = {{ 'true' if message.j1939.is_pdu_broadcast else 'false' }};
+  {% if not message.j1939.is_pdu_broadcast %}
+  // DefaultDestinationAddress only generates for PDU1 destination-specific messages
+  static constexpr uint8_t DefaultDestinationAddress = {{ message.j1939.destination_address }};
+  {% endif %}
+
+  static bool matchesPgn(uint32_t can_id)
+  {
+    {% if message.j1939.is_pdu_broadcast %}
+    return ((can_id >> 8) & 0x3FFFF) == Pgn;
+    {% else %}
+    // PDU1: PS field is destination address, not part of PGN
+    return ((can_id >> 8) & 0x3FF00) == Pgn;
+    {% endif %}
+  }
+  {% endif %}
+
+  // Signals
+  {% for signal in message.signals %}
+  double {{ signal.name }};
+  {% endfor %}
+
+  // Default constructor
+  {{ message.name }}() = default;
+
+  {% if message.signals|length == 1 %}
+  // Single-value constructor
+  {% set signal = message.signals[0] %}
+  explicit {{ message.name }}(double {{ message.signals[0].name }})
+  : {{ signal.name }}({{ signal.name }})
+  {}
+  {% endif %}
+
+  // Constructor from can_frame
+  explicit {{ message.name }}(const can_frame & frame)
+  {
+    {% if message.protocol == 'j1939' %}
+    // Just check PGN match for J1939 messages
+    if (!matchesPgn(frame.can_id & CAN_EFF_MASK)) {
+    {% elif message.is_extended_frame %}
+    // Apply CAN_EFF_FLAG mask because we expect an extended frame
+    if (frame.can_id != (Id | CAN_EFF_FLAG)) {
+    {% else %}
+    if (frame.can_id != Id) {
+    {% endif %}
+      {% if message.protocol == 'j1939' %}
+      throw std::runtime_error("CAN Frame ID does not match this message type PGN");
+      {% else %}
+      throw std::runtime_error("CAN Frame ID does not match this message type ID");
+      {% endif %}
+    }
+
+    {# Don't try to unpack if there are no signals #}
+    {% if message.signals|length > 0 %}
+    {{ message.struct_name }}_t unpacked;
+    if (0 != {{ message.struct_name }}_init(&unpacked)) {
+      throw std::runtime_error("Failed to initialize frame data struct");
+    }
+    if (0 != {{ message.struct_name }}_unpack(&unpacked, frame.data, frame.can_dlc)) {
+      throw std::runtime_error("Failed to unpack can frame data");
+    }
+    {% for signal in message.signals %}
+    {{ signal.name }} = {{ message.struct_name }}_{{ signal.name }}_decode(unpacked.{{ signal.name }});
+    {% endfor %}
+    {% endif %}
+  }
+
+  // Conversion operator to can_frame
+  operator can_frame() const
+  {
+    can_frame frame;
+    {% if message.is_extended_frame %}
+    // Set Extended Frame Flag for linux/can.h standard
+    frame.can_id = Id | CAN_EFF_FLAG;
+    {% else %}
+    frame.can_id = Id;
+    {% endif %}
+    frame.len = DataLength;
+
+    {# Don't try to unpack if there are no signals #}
+    {% if message.signals|length > 0 %}
+    {{ message.struct_name }}_t unpacked;
+    if (0 != {{ message.struct_name }}_init(&unpacked)) {
+      throw std::runtime_error("Unable to initialize frame struct");
+    }
+    {% for signal in message.signals %}
+    unpacked.{{ signal.name }} = {{ message.struct_name }}_{{ signal.name }}_encode({{ signal.name }});
+    {% endfor %}
+    if (0 >= {{ message.struct_name }}_pack(frame.data, &unpacked, DataLength)) {
+      throw std::runtime_error("Failed to pack can frame data");
+    }
+    {% endif %}
+    return frame;
+  }
+};
+
+{% endfor %}
+}  // namespace {{ library_name }}
