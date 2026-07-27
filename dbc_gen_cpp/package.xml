@@ -5,7 +5,7 @@
   <version>0.0.1</version>
   <description>Generate C++ types for CAN messages from a DBC</description>
   <maintainer email="engineering@polymathrobotics.com">Polymath Robotics Engineering</maintainer>
-  <license>Apache License 2.0</license>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
