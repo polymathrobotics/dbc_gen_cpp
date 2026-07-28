@@ -17,6 +17,11 @@ jobs:
     name: ROS 2 ${{ matrix.ros }}
     container:
       image: polymathrobotics/ros:${{ matrix.ros }}-builder-ubuntu
+    # rosdep installs pip deps (e.g. python3-cantools-pip) globally as root.
+    # On Python >= 3.11 (Ubuntu 24.04 images: jazzy, lyrical), PEP 668 requires
+    # opting in to installing alongside externally-managed packages.
+    env:
+      PIP_BREAK_SYSTEM_PACKAGES: 1
     steps:
       - uses: actions/checkout@v4
       - uses: ros-tooling/action-ros-ci@v0.4
