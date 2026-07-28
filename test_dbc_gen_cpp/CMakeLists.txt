@@ -17,6 +17,9 @@ find_package(ament_cmake_auto REQUIRED)
 if(BUILD_TESTING)
   ament_auto_find_test_dependencies()
 
+  find_package(ament_cmake_test REQUIRED)
+  find_package(Catch2 REQUIRED)
+
   generate_dbc_cpp(fake_vehicle_can
     DBC ${CMAKE_CURRENT_SOURCE_DIR}/test/FakeVehicle.dbc
   )
@@ -25,7 +28,26 @@ if(BUILD_TESTING)
     DBC ${CMAKE_CURRENT_SOURCE_DIR}/test/FakeJ1939.dbc
   )
 
-  polymath_add_catch2_test(test_dbc_cpp test/test_dbc_cpp.cpp "fake_vehicle_can;fake_j1939_can" dbc_gen_cpp)
+  # Build the Catch2-based unit test and register it with ament.
+  add_executable(test_dbc_cpp test/test_dbc_cpp.cpp)
+  target_link_libraries(test_dbc_cpp
+    Catch2::Catch2WithMain
+    fake_vehicle_can
+    fake_j1939_can
+  )
+  ament_target_dependencies(test_dbc_cpp dbc_gen_cpp)
+  target_include_directories(test_dbc_cpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test)
+
+  ament_add_test(
+    test_dbc_cpp
+    GENERATE_RESULT_FOR_RETURN_CODE_ZERO
+    COMMAND "$<TARGET_FILE:test_dbc_cpp>"
+      -r junit
+      -s
+      -o test_results/${PROJECT_NAME}/test_dbc_cpp_output.xml
+    ENV CATCH_CONFIG_CONSOLE_WIDTH=120
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
 endif()
 
 ament_package()

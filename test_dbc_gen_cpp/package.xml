@@ -10,8 +10,8 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
+  <test_depend>catch2</test_depend>
   <test_depend>dbc_gen_cpp</test_depend>
-  <test_depend>polymath_test</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

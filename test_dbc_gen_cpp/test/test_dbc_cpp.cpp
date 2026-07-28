@@ -6,7 +6,7 @@
 #include "dbc_gen_cpp/can_handler.hpp"
 #include "fake_j1939_can/fake_j1939_can.hpp"
 #include "fake_vehicle_can/fake_vehicle_can.hpp"
-#include "polymath_test/catch2.hpp"
+#include "test_dbc_gen_cpp/catch2_compat.hpp"
 
 // ============================================================================
 // CAN Encode/Decode Tests (with byte layout verification)
