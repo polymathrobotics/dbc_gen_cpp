@@ -1,0 +1,34 @@
+---
+
+name: Build and test
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_and_test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ros: [humble, jazzy, lyrical]
+    name: ROS 2 ${{ matrix.ros }}
+    container:
+      image: polymathrobotics/ros:${{ matrix.ros }}-builder-ubuntu
+    # rosdep installs pip deps (e.g. python3-cantools-pip) globally as root.
+    # On Python >= 3.11 (Ubuntu 24.04 images: jazzy, lyrical), PEP 668 requires
+    # opting in to installing alongside externally-managed packages.
+    env:
+      PIP_BREAK_SYSTEM_PACKAGES: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          target-ros2-distro: ${{ matrix.ros }}
+          coverage-result: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: colcon-logs-${{ matrix.ros }}
+          path: ros_ws/log
