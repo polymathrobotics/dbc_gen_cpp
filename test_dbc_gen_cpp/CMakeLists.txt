@@ -34,8 +34,8 @@ if(BUILD_TESTING)
     Catch2::Catch2WithMain
     fake_vehicle_can
     fake_j1939_can
+    dbc_gen_cpp::dbc_gen_cpp
   )
-  ament_target_dependencies(test_dbc_cpp dbc_gen_cpp)
   target_include_directories(test_dbc_cpp PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test)
 
   ament_add_test(
