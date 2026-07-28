@@ -3,7 +3,7 @@
 function(generate_dbc_cpp library_name)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
-  set(one_value_args DBC)
+  set(one_value_args DBC EXPORT)
   cmake_parse_arguments(ARG "" "${one_value_args}" "" ${ARGN})
   if(NOT ARG_DBC)
     message(FATAL_ERROR "generate_dbc_cpp: Missing required keyword argument DBC")
@@ -45,9 +45,31 @@ function(generate_dbc_cpp library_name)
   add_library(${library_name} STATIC ${generated_c})
   add_dependencies(${library_name} ${library_name}_c_sources)
   target_link_libraries(${library_name} PUBLIC dbc_gen_cpp::dbc_gen_cpp)
-  target_include_directories(${library_name}
-    PUBLIC ${gen_basedir}
-  )
+
+  if(ARG_EXPORT)
+    # Exportable target: use generator-expression include dirs so the target can be
+    # installed into an EXPORT set and linked from other packages. The generated
+    # headers install to include/${library_name}/, and the .hpp includes its C header
+    # as "${library_name}/${library_name}.h", so the install-interface root is include/.
+    target_include_directories(${library_name}
+      PUBLIC
+        $<BUILD_INTERFACE:${gen_basedir}>
+        $<INSTALL_INTERFACE:include>
+    )
+    install(
+      TARGETS ${library_name}
+      EXPORT ${ARG_EXPORT}
+      ARCHIVE DESTINATION lib
+      LIBRARY DESTINATION lib
+      RUNTIME DESTINATION bin
+      INCLUDES DESTINATION include
+    )
+  else()
+    # Default (in-package use): build-tree include dir only, no exported target.
+    target_include_directories(${library_name}
+      PUBLIC ${gen_basedir}
+    )
+  endif()
 
   # Install the generated files to the install space, just in case they're included in public headers
   install(
