@@ -48,6 +48,20 @@ if(BUILD_TESTING)
     ENV CATCH_CONFIG_CONSOLE_WIDTH=120
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
   )
+
+  # Verify that generate_dbc_cpp() installs the generated headers into the export
+  # location (include/<library_name>/) so downstream packages can consume them.
+  # This exercises the install/export path, which the compiled test above does not:
+  # that test links the libraries in-tree via their BUILD_INTERFACE include dirs.
+  ament_add_test(
+    test_dbc_exported_headers
+    GENERATE_RESULT_FOR_RETURN_CODE_ZERO
+    COMMAND ${CMAKE_COMMAND}
+      -DINSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
+      "-DLIBRARIES=fake_vehicle_can;fake_j1939_can"
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/test/check_exported_headers.cmake
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  )
 endif()
 
 ament_package()
