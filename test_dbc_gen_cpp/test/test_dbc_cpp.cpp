@@ -979,9 +979,9 @@ TEST_CASE("Generated enum - enumerator values match the DBC value table")
   REQUIRE(static_cast<int>(GearStatus_gear::PARK) == 6);
 }
 
-TEST_CASE("Generated enum - underlying type follows the signal type")
+TEST_CASE("Generated enum - underlying type is the smallest that fits the values")
 {
-  // gear is an 8-bit unsigned signal.
+  // gear values are 0..6 -> smallest fitting unsigned type.
   STATIC_REQUIRE(std::is_same_v<std::underlying_type_t<fake_vehicle_can::GearStatus_gear>, uint8_t>);
 }
 
@@ -1009,4 +1009,30 @@ TEST_CASE("Generated enum - signal name with spaces yields a valid enum type")
   REQUIRE(static_cast<int>(DriveModeStatus_Drive_Mode_Select::OFF) == 0);
   REQUIRE(static_cast<int>(DriveModeStatus_Drive_Mode_Select::ON) == 1);
   REQUIRE(std::strcmp(fake_vehicle_can::to_string(DriveModeStatus_Drive_Mode_Select::ON), "On") == 0);
+}
+
+TEST_CASE("Generated enum - negative choice values yield a signed underlying type")
+{
+  // MotorStatus.direction is a signed 8-bit signal with a -1 choice.
+  using fake_vehicle_can::MotorStatus_direction;
+
+  STATIC_REQUIRE(std::is_same_v<std::underlying_type_t<MotorStatus_direction>, int8_t>);
+  REQUIRE(static_cast<int>(MotorStatus_direction::REVERSE) == -1);
+  REQUIRE(static_cast<int>(MotorStatus_direction::STOPPED) == 0);
+  REQUIRE(static_cast<int>(MotorStatus_direction::FORWARD) == 1);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(MotorStatus_direction::REVERSE), "Reverse") == 0);
+}
+
+TEST_CASE("Generated enum - float-typed signal with integer flag choices")
+{
+  // Float-typed signal (SIG_VALTYPE_) with integer bit flags: needs an integral
+  // base wide enough for a 2^31 flag (uint32_t), never `float`.
+  using fake_vehicle_can::SensorFlags_flags;
+
+  STATIC_REQUIRE(std::is_integral_v<std::underlying_type_t<SensorFlags_flags>>);
+  STATIC_REQUIRE(std::is_same_v<std::underlying_type_t<SensorFlags_flags>, uint32_t>);
+  REQUIRE(static_cast<uint32_t>(SensorFlags_flags::ENABLED) == 1u);
+  REQUIRE(static_cast<uint32_t>(SensorFlags_flags::FAULT) == 2u);
+  REQUIRE(static_cast<uint32_t>(SensorFlags_flags::CALIBRATING) == 2147483648u);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(SensorFlags_flags::CALIBRATING), "Calibrating") == 0);
 }

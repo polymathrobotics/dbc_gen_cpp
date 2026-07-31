@@ -53,6 +53,23 @@ def _escape_c_string(text):
     return text.replace('\\', '\\\\').replace('"', '\\"')
 
 
+def _enum_underlying_type(sorted_values):
+    """Smallest stdint type spanning the choice values.
+
+    Driven by the values, not the signal's declared type, so float-typed signals
+    still get an integral base and negatives/high-bit flags always fit.
+    """
+    low, high = sorted_values[0], sorted_values[-1]
+    signed = low < 0
+    for bits in (8, 16, 32, 64):
+        if signed:
+            if -(1 << (bits - 1)) <= low and high <= (1 << (bits - 1)) - 1:
+                return f'int{bits}_t'
+        elif high <= (1 << bits) - 1:
+            return f'uint{bits}_t'
+    return 'int64_t' if signed else 'uint64_t'
+
+
 def build_signal_enums(message, cg_message, used_enum_names):
     """Build an <Message>_<Signal> enum descriptor per signal with VAL_ choices."""
     enums = []
@@ -96,17 +113,11 @@ def build_signal_enums(message, cg_message, used_enum_names):
             used_idents.add(enumerator_ident)
             enumerator_ident_by_value[raw_value] = enumerator_ident
 
-        # Choice values are integer-raw even on scaled/float signals.
-        if cg_signal.signal.conversion.is_float:
-            underlying_type = f'int{cg_signal.type_length}_t'
-        else:
-            underlying_type = cg_signal.type_name
-
         enums.append({
             'name': enum_name,
             'signal_name': cg_signal.signal.name,
             'message_name': message.name,
-            'underlying_type': underlying_type,
+            'underlying_type': _enum_underlying_type(sorted_values),
             'enumerators': [
                 {
                     'ident': enumerator_ident_by_value[raw_value],

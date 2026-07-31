@@ -14,7 +14,7 @@ import pytest
 from cantools import database
 from cantools.database.can.c_source import CodeGenMessage
 
-from dbc_gen_cpp.generate_cpp import build_signal_enums
+from dbc_gen_cpp.generate_cpp import _enum_underlying_type, build_signal_enums
 
 
 def _build_enums(dbc_text, tmp_path):
@@ -54,6 +54,27 @@ GEAR_DBC = """\
      SG_ gear : 0|8@1+ (1,0) [0|255] "" N
     VAL_ 102 gear 0 "Neutral" 3 "Reserved" 4 "Reserved" 5 "4wd mode" 6 "Park!" ;
 """
+
+
+@pytest.mark.parametrize(
+    'values, expected',
+    [
+        ([0, 1, 2, 3], 'uint8_t'),
+        ([0, 255], 'uint8_t'),
+        ([0, 256], 'uint16_t'),
+        ([0, 65535], 'uint16_t'),
+        ([0, 65536], 'uint32_t'),
+        ([1, 2, 2147483648], 'uint32_t'),  # 2^31 flag: stays unsigned 32-bit
+        ([0, 4294967296], 'uint64_t'),  # 2^32: needs 64-bit
+        ([-1, 0, 1], 'int8_t'),  # any negative -> signed
+        ([-128, 127], 'int8_t'),
+        ([-129, 0], 'int16_t'),
+        ([-1, 2147483647], 'int32_t'),
+    ],
+)
+def test_enum_underlying_type_sizing(values, expected):
+    """The underlying type is the smallest stdint type spanning the choice values."""
+    assert _enum_underlying_type(sorted(values)) == expected
 
 
 def test_colliding_enum_names_raise(tmp_path):
