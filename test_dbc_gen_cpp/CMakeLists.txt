@@ -18,7 +18,15 @@ if(BUILD_TESTING)
   ament_auto_find_test_dependencies()
 
   find_package(ament_cmake_test REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
   find_package(Catch2 REQUIRED)
+
+  # Python-level tests for the generator (e.g. the fail-on-ambiguous-name path,
+  # which cannot be exercised through a generated header).
+  ament_add_pytest_test(test_enum_generation
+    test/test_enum_generation.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
 
   generate_dbc_cpp(fake_vehicle_can
     DBC ${CMAKE_CURRENT_SOURCE_DIR}/test/FakeVehicle.dbc
