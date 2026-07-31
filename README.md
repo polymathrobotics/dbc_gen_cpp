@@ -74,8 +74,9 @@ Enumerator names come from the DBC label text, uppercased with non-alphanumeric
 characters turned into underscores (matching cantools' C `..._CHOICE` macros). A few
 labels are adjusted so they remain valid, unique C++ identifiers:
 
-- duplicate labels are de-duplicated by appending their raw value
-  (`"Reserved"` at 3 and 4 → `RESERVED_3`, `RESERVED_4`);
+- duplicate labels must become distinct enumerators (C++ forbids repeating a name),
+  so the raw value is appended: `"Reserved"` at 3 and 4 → `RESERVED_3`, `RESERVED_4`
+  (cantools does this for its C `..._CHOICE` macros; we keep the same names);
 - labels starting with a digit get a leading underscore (`"4wd mode"` → `_4WD_MODE`);
 - doubled and trailing underscores are collapsed/stripped
   (`"Truck system with fault, stop!"` → `TRUCK_SYSTEM_WITH_FAULT_STOP`).
