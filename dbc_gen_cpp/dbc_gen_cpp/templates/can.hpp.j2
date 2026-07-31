@@ -124,4 +124,24 @@ struct {{ message.name }}
 };
 
 {% endfor %}
+{% for enum in enums %}
+// Value map for {{ enum.message_name }}.{{ enum.signal_name }}
+enum class {{ enum.name }} : {{ enum.underlying_type }}
+{
+  {% for v in enum.enumerators %}
+  {{ v.ident }} = {{ v.value }},
+  {% endfor %}
+};
+
+inline const char * to_string({{ enum.name }} value)
+{
+  switch (value) {
+    {% for v in enum.enumerators %}
+    case {{ enum.name }}::{{ v.ident }}: return "{{ v.label }}";
+    {% endfor %}
+    default: return "UNKNOWN";
+  }
+}
+
+{% endfor %}
 }  // namespace {{ library_name }}

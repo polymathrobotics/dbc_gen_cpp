@@ -39,6 +39,49 @@ my_can_socket->send(frame);
 
 ```
 
+### Signal Value Maps (Enums)
+
+DBC value tables (`VAL_` lines, and the global `VAL_TABLE_`) map raw signal values
+to human-readable states. For every signal that has one, an `enum class` is generated
+alongside the message structs, in the library's namespace.
+
+Enums are named `<MessageName>_<SignalName>` (top-level and prefixed, so the same
+signal name in different messages never collides). A matching `to_string()` overload
+returns the original DBC label text.
+
+Signal fields on the message struct stay as raw physical values (`double`) — the enum
+is **additive**, so you opt in by casting when you want the named value:
+
+```c++
+#include "my_can_library_name/my_can_library_name.hpp"
+
+// Given a DBC message TransmissionStatus with a signal `gear` whose VAL_ table is
+//   VAL_ <id> gear 0 "Neutral" 1 "Drive" 2 "Reverse" ... ;
+my_can_library_name::TransmissionStatus msg{frame};
+
+auto gear = static_cast<my_can_library_name::TransmissionStatus_gear>(
+              static_cast<int>(msg.gear));
+
+if (gear == my_can_library_name::TransmissionStatus_gear::REVERSE) {
+  // ...
+}
+
+// to_string() returns the original label from the DBC, handy for logging.
+printf("gear = %s\n", my_can_library_name::to_string(gear));  // e.g. "Reverse"
+```
+
+Enumerator names come from the DBC label text, uppercased with non-alphanumeric
+characters turned into underscores (matching cantools' C `..._CHOICE` macros). A few
+labels are adjusted so they remain valid, unique C++ identifiers:
+
+- duplicate labels are de-duplicated by appending their raw value
+  (`"Reserved"` at 3 and 4 → `RESERVED_3`, `RESERVED_4`);
+- labels starting with a digit get a leading underscore (`"4wd mode"` → `_4WD_MODE`);
+- doubled and trailing underscores are collapsed/stripped
+  (`"Truck system with fault, stop!"` → `TRUCK_SYSTEM_WITH_FAULT_STOP`).
+
+`to_string()` always returns the unmodified label, regardless of these adjustments.
+
 ### CAN Handler - Receive/Subscribe to CAN Messages
 
 A helper class `dbc_gen_cpp::CANHandler` is provided.

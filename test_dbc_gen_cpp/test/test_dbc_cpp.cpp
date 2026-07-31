@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <cstring>
+#include <type_traits>
 
 #include "dbc_gen_cpp/can_handler.hpp"
 #include "fake_j1939_can/fake_j1939_can.hpp"
@@ -953,4 +954,59 @@ TEST_CASE("CANHandler routes messages with 0 length payload")
     REQUIRE(handler.handle(frame) == true);
     REQUIRE(callback_invoked == true);
   }
+}
+
+// ============================================================================
+// Signal value-map (enum) generation tests
+// ============================================================================
+// GearStatus.gear in FakeVehicle.dbc carries a VAL_ table exercising every
+// identifier-sanitization path: normal names, a duplicated label ("Reserved"),
+// a leading-digit label ("4wd mode") and a punctuation label ("Park!").
+
+TEST_CASE("Generated enum - enumerator values match the DBC value table")
+{
+  using fake_vehicle_can::GearStatus_gear;
+
+  REQUIRE(static_cast<int>(GearStatus_gear::NEUTRAL) == 0);
+  REQUIRE(static_cast<int>(GearStatus_gear::DRIVE) == 1);
+  REQUIRE(static_cast<int>(GearStatus_gear::REVERSE) == 2);
+  // Duplicated label "Reserved" is de-duplicated by appending the raw value.
+  REQUIRE(static_cast<int>(GearStatus_gear::RESERVED_3) == 3);
+  REQUIRE(static_cast<int>(GearStatus_gear::RESERVED_4) == 4);
+  // Leading-digit label gets an underscore prefix to stay a valid identifier.
+  REQUIRE(static_cast<int>(GearStatus_gear::_4WD_MODE) == 5);
+  // Trailing punctuation is stripped.
+  REQUIRE(static_cast<int>(GearStatus_gear::PARK) == 6);
+}
+
+TEST_CASE("Generated enum - underlying type follows the signal type")
+{
+  // gear is an 8-bit unsigned signal.
+  STATIC_REQUIRE(std::is_same_v<std::underlying_type_t<fake_vehicle_can::GearStatus_gear>, uint8_t>);
+}
+
+TEST_CASE("Generated enum - to_string returns the original DBC label")
+{
+  using fake_vehicle_can::GearStatus_gear;
+
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(GearStatus_gear::NEUTRAL), "Neutral") == 0);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(GearStatus_gear::REVERSE), "Reverse") == 0);
+  // Original label text is preserved verbatim, including punctuation and casing.
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(GearStatus_gear::_4WD_MODE), "4wd mode") == 0);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(GearStatus_gear::PARK), "Park!") == 0);
+  // Both de-duplicated enumerators keep the same source label.
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(GearStatus_gear::RESERVED_3), "Reserved") == 0);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(GearStatus_gear::RESERVED_4), "Reserved") == 0);
+}
+
+TEST_CASE("Generated enum - signal name with spaces yields a valid enum type")
+{
+  // DriveModeStatus.mode carries a SystemSignalLongSymbol ("Drive Mode Select"),
+  // which cantools surfaces as the signal name. The spaces must be sanitized out
+  // of the generated enum type name.
+  using fake_vehicle_can::DriveModeStatus_Drive_Mode_Select;
+
+  REQUIRE(static_cast<int>(DriveModeStatus_Drive_Mode_Select::OFF) == 0);
+  REQUIRE(static_cast<int>(DriveModeStatus_Drive_Mode_Select::ON) == 1);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(DriveModeStatus_Drive_Mode_Select::ON), "On") == 0);
 }
