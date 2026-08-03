@@ -16,6 +16,16 @@ namespace {{ library_name }}
 {% for message in messages %}
 struct {{ message.name }}
 {
+  {% for enum in message.enums %}
+  // Value map for {{ message.name }}.{{ enum.signal_name }}
+  enum class {{ enum.name }} : {{ enum.underlying_type }}
+  {
+    {% for v in enum.enumerators %}
+    {{ v.ident }} = {{ v.value }},
+    {% endfor %}
+  };
+
+  {% endfor %}
   static constexpr uint32_t Id = {{ message.can_id }};
   static constexpr uint8_t DataLength = {{ message.data_length }};
 
@@ -124,24 +134,18 @@ struct {{ message.name }}
 };
 
 {% endfor %}
-{% for enum in enums %}
-// Value map for {{ enum.message_name }}.{{ enum.signal_name }}
-enum class {{ enum.name }} : {{ enum.underlying_type }}
-{
-  {% for v in enum.enumerators %}
-  {{ v.ident }} = {{ v.value }},
-  {% endfor %}
-};
-
-inline const char * to_string({{ enum.name }} value)
+{% for message in messages %}
+{% for enum in message.enums %}
+inline const char * to_string({{ message.name }}::{{ enum.name }} value)
 {
   switch (value) {
     {% for v in enum.enumerators %}
-    case {{ enum.name }}::{{ v.ident }}: return "{{ v.label }}";
+    case {{ message.name }}::{{ enum.name }}::{{ v.ident }}: return "{{ v.label }}";
     {% endfor %}
     default: return "UNKNOWN";
   }
 }
 
+{% endfor %}
 {% endfor %}
 }  // namespace {{ library_name }}

@@ -70,25 +70,68 @@ def _enum_underlying_type(sorted_values):
     return 'int64_t' if signed else 'uint64_t'
 
 
-def build_signal_enums(message, cg_message, used_enum_names):
-    """Build an <Message>_<Signal> enum descriptor per signal with VAL_ choices."""
+def _enum_type_name(signal_name):
+    """PascalCase enum type name for a signal, e.g. 'gear' -> 'Gear'.
+
+    The enum is nested inside its message struct, so the name only needs to be
+    unique within that struct. PascalCase keeps it distinct from the snake_case
+    signal member that shares the same source name (member 'gear' vs type 'Gear').
+    """
+    parts = re.split(r'[^0-9a-zA-Z]+', signal_name)
+    name = ''.join(p[:1].upper() + p[1:] for p in parts if p)
+    if not name:
+        name = 'Enum'
+    if name[0].isdigit():
+        name = '_' + name
+    return name
+
+
+# Struct-scope names the template already emits; a nested enum must not shadow them.
+_RESERVED_STRUCT_NAMES = frozenset({
+    'Id',
+    'DataLength',
+    'IsJ1939',
+    'IsExtendedFrame',
+    'Pgn',
+    'DefaultPriority',
+    'SourceAddress',
+    'IsPduBroadcast',
+    'DefaultDestinationAddress',
+    'matchesPgn',
+})
+
+
+def build_signal_enums(message, cg_message):
+    """Build a nested enum descriptor per signal with VAL_ choices.
+
+    Each enum is scoped inside its message struct, referenced as
+    ``<Message>::<Signal>`` (e.g. ``GearStatus::Gear::RESERVED``).
+    """
     enums = []
+    # Names already taken inside this struct: the message name (constructor),
+    # every signal member, and the static members the template emits.
+    reserved = {message.name, *_RESERVED_STRUCT_NAMES}
+    reserved.update(cg_signal.snake_name for cg_signal in cg_message.cg_signals)
+    used_enum_names = {}
     for cg_signal in cg_message.cg_signals:
         choices = cg_signal.signal.choices
         if not choices:
             continue
 
         descriptor = f'{message.name}.{cg_signal.signal.name}'
-        enum_name = _sanitize_identifier(
-            f'{_sanitize_identifier(message.name)}_{_sanitize_identifier(cg_signal.signal.name)}', fallback='Enum'
-        )
-        # Fail loudly for identical names
+        enum_name = _enum_type_name(cg_signal.signal.name)
+        # Fail loudly on a name clash within the struct (case-sensitive, matching C++).
+        if enum_name in reserved:
+            raise ValueError(
+                f"Generated enum name '{enum_name}' for '{descriptor}' collides with an "
+                f'existing member of struct {message.name}. Rename the DBC signal (or its '
+                f'SystemSignalLongSymbol) so its enum type name is unique within the message.'
+            )
         if enum_name in used_enum_names:
             raise ValueError(
                 f"Generated enum name '{enum_name}' collides between "
                 f"'{used_enum_names[enum_name]}' and '{descriptor}'. Rename one of the "
-                f'DBC signals (or its SystemSignalLongSymbol) so the sanitized '
-                f'<Message>_<Signal> names are unique.'
+                f'DBC signals so their PascalCase enum names are unique within the message.'
             )
         used_enum_names[enum_name] = descriptor
 
@@ -116,7 +159,6 @@ def build_signal_enums(message, cg_message, used_enum_names):
         enums.append({
             'name': enum_name,
             'signal_name': cg_signal.signal.name,
-            'message_name': message.name,
             'underlying_type': _enum_underlying_type(sorted_values),
             'enumerators': [
                 {
@@ -161,11 +203,8 @@ def generate_cpp_source(args):
     hpp_template = jinja_env.from_string(hpp_template_src)
 
     message_types = []
-    signal_enums = []
-    used_enum_names = {}
     for message in dbase.messages:
         cg_message = CodeGenMessage(message)
-        signal_enums.extend(build_signal_enums(message, cg_message, used_enum_names))
 
         msg_dict = {
             'name': message.name,
@@ -181,6 +220,7 @@ def generate_cpp_source(args):
                 }
                 for cg_signal in cg_message.cg_signals
             ],
+            'enums': build_signal_enums(message, cg_message),
         }
         if message.protocol == 'j1939':
             msg_dict['j1939'] = parse_j1939_id(message.frame_id)
@@ -188,7 +228,6 @@ def generate_cpp_source(args):
     hpp_src = hpp_template.render(
         library_name=database_name,
         messages=message_types,
-        enums=signal_enums,
         c_header=filename_h,
     )
 

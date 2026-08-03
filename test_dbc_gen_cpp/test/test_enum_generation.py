@@ -22,25 +22,24 @@ def _build_enums(dbc_text, tmp_path):
     path = tmp_path / 'in.dbc'
     path.write_text(textwrap.dedent(dbc_text))
     dbase = database.load_file(str(path))
-    used_enum_names = {}
     enums = []
     for message in dbase.messages:
-        enums.extend(build_signal_enums(message, CodeGenMessage(message), used_enum_names))
+        enums.extend(build_signal_enums(message, CodeGenMessage(message)))
     return enums
 
 
-# Message "A_B" signal "C" and message "A" signal "B_C" both sanitize to A_B_C.
+# Enums are nested per message, so collisions are now scoped to a single struct:
+# signals "gear" and "Gear" in one message both PascalCase to the enum type "Gear".
 COLLIDING_DBC = """\
     VERSION ""
     NS_ :
     BS_:
     BU_: N
-    BO_ 100 A_B: 1 N
-     SG_ C : 0|8@1+ (1,0) [0|255] "" N
-    BO_ 101 A: 1 N
-     SG_ B_C : 0|8@1+ (1,0) [0|255] "" N
-    VAL_ 100 C 0 "x" 1 "y" ;
-    VAL_ 101 B_C 0 "p" 1 "q" ;
+    BO_ 102 GearStatus: 2 N
+     SG_ gear : 0|8@1+ (1,0) [0|255] "" N
+     SG_ Gear : 8|8@1+ (1,0) [0|255] "" N
+    VAL_ 102 gear 0 "x" 1 "y" ;
+    VAL_ 102 Gear 0 "p" 1 "q" ;
 """
 
 # gear exercises every enumerator path: normal, duplicate label ("Reserved"),
@@ -78,13 +77,13 @@ def test_enum_underlying_type_sizing(values, expected):
 
 
 def test_colliding_enum_names_raise(tmp_path):
-    """Two signals whose sanitized <Message>_<Signal> names match must fail loudly."""
+    """Two signals whose PascalCase enum names match within a message must fail loudly."""
     with pytest.raises(ValueError, match='collides') as excinfo:
         _build_enums(COLLIDING_DBC, tmp_path)
     # The error names both offending signals so the ambiguity is decipherable.
     message = str(excinfo.value)
-    assert 'A_B.C' in message
-    assert 'A.B_C' in message
+    assert 'GearStatus.gear' in message
+    assert 'GearStatus.Gear' in message
 
 
 def test_value_map_generates_enum(tmp_path):
@@ -93,7 +92,7 @@ def test_value_map_generates_enum(tmp_path):
     assert len(enums) == 1
 
     enum = enums[0]
-    assert enum['name'] == 'GearStatus_gear'
+    assert enum['name'] == 'Gear'
     assert enum['underlying_type'] == 'uint8_t'
 
     by_value = {v['value']: v for v in enum['enumerators']}
