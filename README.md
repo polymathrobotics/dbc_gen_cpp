@@ -39,6 +39,54 @@ my_can_socket->send(frame);
 
 ```
 
+### Signal Value Maps (Enums)
+
+DBC value tables (`VAL_` lines, and the global `VAL_TABLE_`) map raw signal values
+to human-readable states. For every signal that has one, an `enum class` is generated
+**nested inside its message struct**.
+
+The enum type name is the signal name in `PascalCase`, so it is referenced as
+`<MessageName>::<SignalName>` (e.g. `TransmissionStatus::Gear`). PascalCasing keeps the
+type distinct from the message's raw signal field, which stays `snake_case` (`double gear;`).
+Because each enum is scoped to its own struct, the same signal name in different messages
+never collides; two signals *within one message* whose names PascalCase to the same
+identifier fail generation loudly. A matching `to_string()` overload in the library's
+namespace returns the original DBC label text.
+
+Signal fields on the message struct stay as raw physical values (`double`) — the enum
+is **additive**, so you opt in by casting when you want the named value:
+
+```c++
+#include "my_can_library_name/my_can_library_name.hpp"
+
+// Given a DBC message TransmissionStatus with a signal `gear` whose VAL_ table is
+//   VAL_ <id> gear 0 "Neutral" 1 "Drive" 2 "Reverse" ... ;
+my_can_library_name::TransmissionStatus msg{frame};
+
+auto gear = static_cast<my_can_library_name::TransmissionStatus::Gear>(
+              static_cast<int>(msg.gear));
+
+if (gear == my_can_library_name::TransmissionStatus::Gear::REVERSE) {
+  // ...
+}
+
+// to_string() returns the original label from the DBC, handy for logging.
+printf("gear = %s\n", my_can_library_name::to_string(gear));  // e.g. "Reverse"
+```
+
+Enumerator names come from the DBC label text, uppercased with non-alphanumeric
+characters turned into underscores (matching cantools' C `..._CHOICE` macros). A few
+labels are adjusted so they remain valid, unique C++ identifiers:
+
+- duplicate labels must become distinct enumerators (C++ forbids repeating a name),
+  so the raw value is appended: `"Reserved"` at 3 and 4 → `RESERVED_3`, `RESERVED_4`
+  (cantools does this for its C `..._CHOICE` macros; we keep the same names);
+- labels starting with a digit get a leading underscore (`"4wd mode"` → `_4WD_MODE`);
+- doubled and trailing underscores are collapsed/stripped
+  (`"Truck system with fault, stop!"` → `TRUCK_SYSTEM_WITH_FAULT_STOP`).
+
+`to_string()` always returns the unmodified label, regardless of these adjustments.
+
 ### CAN Handler - Receive/Subscribe to CAN Messages
 
 A helper class `dbc_gen_cpp::CANHandler` is provided.

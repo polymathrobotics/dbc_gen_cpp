@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <cstring>
+#include <type_traits>
 
 #include "dbc_gen_cpp/can_handler.hpp"
 #include "fake_j1939_can/fake_j1939_can.hpp"
@@ -953,4 +954,86 @@ TEST_CASE("CANHandler routes messages with 0 length payload")
     REQUIRE(handler.handle(frame) == true);
     REQUIRE(callback_invoked == true);
   }
+}
+
+// ============================================================================
+// Signal value-map (enum) generation tests
+// ============================================================================
+// GearStatus.gear in FakeVehicle.dbc carries a VAL_ table exercising every
+// identifier-sanitization path: normal names, a duplicated label ("Reserved"),
+// a leading-digit label ("4wd mode") and a punctuation label ("Park!").
+
+TEST_CASE("Generated enum - enumerator values match the DBC value table")
+{
+  // The enum is nested inside its message struct: GearStatus::Gear.
+  using Gear = fake_vehicle_can::GearStatus::Gear;
+
+  REQUIRE(static_cast<int>(Gear::NEUTRAL) == 0);
+  REQUIRE(static_cast<int>(Gear::DRIVE) == 1);
+  REQUIRE(static_cast<int>(Gear::REVERSE) == 2);
+  // Duplicated label "Reserved" is de-duplicated by appending the raw value.
+  REQUIRE(static_cast<int>(Gear::RESERVED_3) == 3);
+  REQUIRE(static_cast<int>(Gear::RESERVED_4) == 4);
+  // Leading-digit label gets an underscore prefix to stay a valid identifier.
+  REQUIRE(static_cast<int>(Gear::_4WD_MODE) == 5);
+  // Trailing punctuation is stripped.
+  REQUIRE(static_cast<int>(Gear::PARK) == 6);
+}
+
+TEST_CASE("Generated enum - underlying type is the smallest that fits the values")
+{
+  // gear values are 0..6 -> smallest fitting unsigned type.
+  STATIC_REQUIRE(std::is_same_v<std::underlying_type_t<fake_vehicle_can::GearStatus::Gear>, uint8_t>);
+}
+
+TEST_CASE("Generated enum - to_string returns the original DBC label")
+{
+  using Gear = fake_vehicle_can::GearStatus::Gear;
+
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(Gear::NEUTRAL), "Neutral") == 0);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(Gear::REVERSE), "Reverse") == 0);
+  // Original label text is preserved verbatim, including punctuation and casing.
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(Gear::_4WD_MODE), "4wd mode") == 0);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(Gear::PARK), "Park!") == 0);
+  // Both de-duplicated enumerators keep the same source label.
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(Gear::RESERVED_3), "Reserved") == 0);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(Gear::RESERVED_4), "Reserved") == 0);
+}
+
+TEST_CASE("Generated enum - signal name with spaces yields a valid enum type")
+{
+  // DriveModeStatus.mode carries a SystemSignalLongSymbol ("Drive Mode Select"),
+  // which cantools surfaces as the signal name. The spaces must be sanitized out
+  // of the generated (PascalCase) nested enum type name.
+  using DriveModeSelect = fake_vehicle_can::DriveModeStatus::DriveModeSelect;
+
+  REQUIRE(static_cast<int>(DriveModeSelect::OFF) == 0);
+  REQUIRE(static_cast<int>(DriveModeSelect::ON) == 1);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(DriveModeSelect::ON), "On") == 0);
+}
+
+TEST_CASE("Generated enum - negative choice values yield a signed underlying type")
+{
+  // MotorStatus.direction is a signed 8-bit signal with a -1 choice.
+  using Direction = fake_vehicle_can::MotorStatus::Direction;
+
+  STATIC_REQUIRE(std::is_same_v<std::underlying_type_t<Direction>, int8_t>);
+  REQUIRE(static_cast<int>(Direction::REVERSE) == -1);
+  REQUIRE(static_cast<int>(Direction::STOPPED) == 0);
+  REQUIRE(static_cast<int>(Direction::FORWARD) == 1);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(Direction::REVERSE), "Reverse") == 0);
+}
+
+TEST_CASE("Generated enum - float-typed signal with integer flag choices")
+{
+  // Float-typed signal (SIG_VALTYPE_) with integer bit flags: needs an integral
+  // base wide enough for a 2^31 flag (uint32_t), never `float`.
+  using Flags = fake_vehicle_can::SensorFlags::Flags;
+
+  STATIC_REQUIRE(std::is_integral_v<std::underlying_type_t<Flags>>);
+  STATIC_REQUIRE(std::is_same_v<std::underlying_type_t<Flags>, uint32_t>);
+  REQUIRE(static_cast<uint32_t>(Flags::ENABLED) == 1u);
+  REQUIRE(static_cast<uint32_t>(Flags::FAULT) == 2u);
+  REQUIRE(static_cast<uint32_t>(Flags::CALIBRATING) == 2147483648u);
+  REQUIRE(std::strcmp(fake_vehicle_can::to_string(Flags::CALIBRATING), "Calibrating") == 0);
 }

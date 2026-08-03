@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import argparse
 import importlib.resources
+import re
 from pathlib import Path
 
 from cantools import database
@@ -35,6 +36,140 @@ def parse_j1939_id(frame_id):
     if not is_pdu_broadcast:
         result['destination_address'] = ps
     return result
+
+
+def _sanitize_identifier(name, fallback='X'):
+    """Turn arbitrary DBC text (names, labels) into a valid C++ identifier."""
+    name = re.sub(r'[^0-9a-zA-Z]+', '_', name).strip('_')
+    if not name:
+        name = fallback
+    if name[0].isdigit():
+        name = '_' + name
+    return name
+
+
+def _escape_c_string(text):
+    """Escape a DBC label so it is safe inside a C string literal."""
+    return text.replace('\\', '\\\\').replace('"', '\\"')
+
+
+def _enum_underlying_type(sorted_values):
+    """Smallest stdint type spanning the choice values.
+
+    Driven by the values, not the signal's declared type, so float-typed signals
+    still get an integral base and negatives/high-bit flags always fit.
+    """
+    low, high = sorted_values[0], sorted_values[-1]
+    signed = low < 0
+    for bits in (8, 16, 32, 64):
+        if signed:
+            if -(1 << (bits - 1)) <= low and high <= (1 << (bits - 1)) - 1:
+                return f'int{bits}_t'
+        elif high <= (1 << bits) - 1:
+            return f'uint{bits}_t'
+    return 'int64_t' if signed else 'uint64_t'
+
+
+def _enum_type_name(signal_name):
+    """PascalCase enum type name for a signal, e.g. 'gear' -> 'Gear'.
+
+    The enum is nested inside its message struct, so the name only needs to be
+    unique within that struct. PascalCase keeps it distinct from the snake_case
+    signal member that shares the same source name (member 'gear' vs type 'Gear').
+    """
+    parts = re.split(r'[^0-9a-zA-Z]+', signal_name)
+    name = ''.join(p[:1].upper() + p[1:] for p in parts if p)
+    if not name:
+        name = 'Enum'
+    if name[0].isdigit():
+        name = '_' + name
+    return name
+
+
+# Struct-scope names the template already emits; a nested enum must not shadow them.
+_RESERVED_STRUCT_NAMES = frozenset({
+    'Id',
+    'DataLength',
+    'IsJ1939',
+    'IsExtendedFrame',
+    'Pgn',
+    'DefaultPriority',
+    'SourceAddress',
+    'IsPduBroadcast',
+    'DefaultDestinationAddress',
+    'matchesPgn',
+})
+
+
+def build_signal_enums(message, cg_message):
+    """Build a nested enum descriptor per signal with VAL_ choices.
+
+    Each enum is scoped inside its message struct, referenced as
+    ``<Message>::<Signal>`` (e.g. ``GearStatus::Gear::RESERVED``).
+    """
+    enums = []
+    # Names already taken inside this struct: the message name (constructor),
+    # every signal member, and the static members the template emits.
+    reserved = {message.name, *_RESERVED_STRUCT_NAMES}
+    reserved.update(cg_signal.snake_name for cg_signal in cg_message.cg_signals)
+    used_enum_names = {}
+    for cg_signal in cg_message.cg_signals:
+        choices = cg_signal.signal.choices
+        if not choices:
+            continue
+
+        descriptor = f'{message.name}.{cg_signal.signal.name}'
+        enum_name = _enum_type_name(cg_signal.signal.name)
+        # Fail loudly on a name clash within the struct (case-sensitive, matching C++).
+        if enum_name in reserved:
+            raise ValueError(
+                f"Generated enum name '{enum_name}' for '{descriptor}' collides with an "
+                f'existing member of struct {message.name}. Rename the DBC signal (or its '
+                f'SystemSignalLongSymbol) so its enum type name is unique within the message.'
+            )
+        if enum_name in used_enum_names:
+            raise ValueError(
+                f"Generated enum name '{enum_name}' collides between "
+                f"'{used_enum_names[enum_name]}' and '{descriptor}'. Rename one of the "
+                f'DBC signals so their PascalCase enum names are unique within the message.'
+            )
+        used_enum_names[enum_name] = descriptor
+
+        # De-duplicated UPPER_SNAKE names, matching cantools' C ..._CHOICE #defines.
+        choice_name_by_value = cg_signal.unique_choices
+        sorted_values = sorted(choice_name_by_value)
+
+        enumerator_ident_by_value = {}
+        used_idents = set()
+        for raw_value in sorted_values:
+            enumerator_ident = _sanitize_identifier(choice_name_by_value[raw_value], fallback='VALUE')
+            if enumerator_ident in used_idents:
+                # Repeated label (e.g. two "Reserved"): suffix the value to disambiguate.
+                enumerator_ident = (
+                    f'{enumerator_ident}_{raw_value}' if raw_value >= 0 else f'{enumerator_ident}_n{-raw_value}'
+                )
+            if enumerator_ident in used_idents:
+                raise ValueError(
+                    f"Enumerator '{enumerator_ident}' collides in enum '{enum_name}'. Two DBC "
+                    f'choices sanitize to the same C++ identifier; rename one.'
+                )
+            used_idents.add(enumerator_ident)
+            enumerator_ident_by_value[raw_value] = enumerator_ident
+
+        enums.append({
+            'name': enum_name,
+            'signal_name': cg_signal.signal.name,
+            'underlying_type': _enum_underlying_type(sorted_values),
+            'enumerators': [
+                {
+                    'ident': enumerator_ident_by_value[raw_value],
+                    'value': raw_value,
+                    'label': _escape_c_string(str(choices[raw_value])),
+                }
+                for raw_value in sorted_values
+            ],
+        })
+    return enums
 
 
 def generate_cpp_source(args):
@@ -85,11 +220,16 @@ def generate_cpp_source(args):
                 }
                 for cg_signal in cg_message.cg_signals
             ],
+            'enums': build_signal_enums(message, cg_message),
         }
         if message.protocol == 'j1939':
             msg_dict['j1939'] = parse_j1939_id(message.frame_id)
         message_types.append(msg_dict)
-    hpp_src = hpp_template.render(library_name=database_name, messages=message_types, c_header=filename_h)
+    hpp_src = hpp_template.render(
+        library_name=database_name,
+        messages=message_types,
+        c_header=filename_h,
+    )
 
     with (outdir / filename_hpp).open('w') as f:
         f.write(hpp_src)

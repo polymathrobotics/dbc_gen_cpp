@@ -61,6 +61,18 @@ BO_ 2566859520 EngineAuxStatus: 8 Vehicle
  SG_ aux_coolant_temp : 0|8@1+ (1,-40) [-40|210] "degC" Computer
  SG_ aux_oil_pressure : 8|8@1+ (4,0) [0|1000] "kPa" Computer
 
+BO_ 102 GearStatus: 1 Vehicle
+ SG_ gear : 0|8@1+ (1,0) [0|255] "" Computer
+
+BO_ 103 DriveModeStatus: 1 Vehicle
+ SG_ mode : 0|8@1+ (1,0) [0|255] "" Computer
+
+BO_ 104 MotorStatus: 1 Vehicle
+ SG_ direction : 0|8@1- (1,0) [-1|1] "" Computer
+
+BO_ 105 SensorFlags: 4 Vehicle
+ SG_ flags : 0|32@1- (1,0) [0|0] "" Computer
+
 BA_DEF_ BO_ "VFrameFormat" ENUM "StandardCAN","ExtendedCAN","reserved","J1939PG";
 BA_DEF_DEF_ "VFrameFormat" "";
 BA_ "VFrameFormat" BO_ 2566859520 3;
@@ -68,6 +80,16 @@ BA_ "VFrameFormat" BO_ 2566859520 3;
 SIG_VALTYPE_ 100 speed : 1;
 SIG_VALTYPE_ 200 drive_speed : 1;
 SIG_VALTYPE_ 200 drive_angle : 1;
+SIG_VALTYPE_ 105 flags : 1;
 
 CM_ BO_ 2147483848 "CAN ID 200 (0xC8) with extended frame flag (0x80000000) set";
 CM_ BO_ 2566859520 "Add one J1939 Message to test having a single J1939 message in a non-J1939 DBC";
+
+VAL_ 102 gear 0 "Neutral" 1 "Drive" 2 "Reverse" 3 "Reserved" 4 "Reserved" 5 "4wd mode" 6 "Park!" ;
+VAL_ 103 mode 0 "Off" 1 "On" ;
+VAL_ 104 direction -1 "Reverse" 0 "Stopped" 1 "Forward" ;
+VAL_ 105 flags 1 "Enabled" 2 "Fault" 2147483648 "Calibrating" ;
+
+BA_DEF_ SG_ "SystemSignalLongSymbol" STRING ;
+BA_DEF_DEF_ "SystemSignalLongSymbol" "";
+BA_ "SystemSignalLongSymbol" SG_ 103 mode "Drive Mode Select";
