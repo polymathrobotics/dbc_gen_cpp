@@ -43,11 +43,15 @@ my_can_socket->send(frame);
 
 DBC value tables (`VAL_` lines, and the global `VAL_TABLE_`) map raw signal values
 to human-readable states. For every signal that has one, an `enum class` is generated
-alongside the message structs, in the library's namespace.
+**nested inside its message struct**.
 
-Enums are named `<MessageName>_<SignalName>` (top-level and prefixed, so the same
-signal name in different messages never collides). A matching `to_string()` overload
-returns the original DBC label text.
+The enum type name is the signal name in `PascalCase`, so it is referenced as
+`<MessageName>::<SignalName>` (e.g. `TransmissionStatus::Gear`). PascalCasing keeps the
+type distinct from the message's raw signal field, which stays `snake_case` (`double gear;`).
+Because each enum is scoped to its own struct, the same signal name in different messages
+never collides; two signals *within one message* whose names PascalCase to the same
+identifier fail generation loudly. A matching `to_string()` overload in the library's
+namespace returns the original DBC label text.
 
 Signal fields on the message struct stay as raw physical values (`double`) — the enum
 is **additive**, so you opt in by casting when you want the named value:
@@ -59,10 +63,10 @@ is **additive**, so you opt in by casting when you want the named value:
 //   VAL_ <id> gear 0 "Neutral" 1 "Drive" 2 "Reverse" ... ;
 my_can_library_name::TransmissionStatus msg{frame};
 
-auto gear = static_cast<my_can_library_name::TransmissionStatus_gear>(
+auto gear = static_cast<my_can_library_name::TransmissionStatus::Gear>(
               static_cast<int>(msg.gear));
 
-if (gear == my_can_library_name::TransmissionStatus_gear::REVERSE) {
+if (gear == my_can_library_name::TransmissionStatus::Gear::REVERSE) {
   // ...
 }
 
