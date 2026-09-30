@@ -39,6 +39,21 @@ my_can_socket->send(frame);
 
 ```
 
+### Time Stamps and `socketcan_adapter`
+
+Each message carries `receive_time` (`std::chrono::steady_clock`) and `bus_time` (`std::chrono::system_clock`), both default to the epoch.
+
+Constructing a message from a [`polymath::socketcan::CanFrame`](https://github.com/polymathrobotics/socketcan_adapter) decodes the frame and copies both time stamps.
+
+```c++
+polymath::socketcan::CanFrame frame = ...;
+my_can_library_name::MessageName message{frame};
+message.receive_time;
+message.bus_time;
+```
+
+This makes `socketcan_adapter` a dependency of `dbc_gen_cpp`, installed by `rosdep install`.
+
 ### Signal Value Maps (Enums)
 
 DBC value tables (`VAL_` lines, and the global `VAL_TABLE_`) map raw signal values

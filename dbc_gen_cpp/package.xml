@@ -10,6 +10,8 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
+  <depend>socketcan_adapter</depend>
+
   <exec_depend>python3-cantools-pip</exec_depend>
   <exec_depend>python3-jinja2</exec_depend>
 

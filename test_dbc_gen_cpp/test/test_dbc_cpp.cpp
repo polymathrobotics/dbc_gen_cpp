@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Polymath Robotics, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#include <chrono>
 #include <cstring>
 #include <type_traits>
 
@@ -366,6 +367,37 @@ TEST_CASE("Standard CAN ID mismatch throws")
   memset(frame.data, 0, 8);
 
   REQUIRE_THROWS(fake_vehicle_can::SteeringFeedback{frame});
+}
+
+TEST_CASE("Construct from socketcan CanFrame keeps time stamps")
+{
+  can_frame raw;
+  memset(&raw, 0, sizeof(raw));
+  raw.can_id = fake_vehicle_can::SteeringFeedback::Id;
+  raw.can_dlc = fake_vehicle_can::SteeringFeedback::DataLength;
+  raw.data[0] = 25;
+
+  polymath::socketcan::CanFrame frame{raw};
+  const auto receive_time = std::chrono::steady_clock::time_point{std::chrono::seconds{5}};
+  const auto bus_time = std::chrono::system_clock::time_point{std::chrono::seconds{7}};
+  frame.set_receive_timestamp(receive_time);
+  frame.set_bus_timestamp(bus_time);
+
+  const fake_vehicle_can::SteeringFeedback msg{frame};
+
+  REQUIRE(msg.receive_time == receive_time);
+  REQUIRE(msg.bus_time == bus_time);
+  REQUIRE(msg.angle == 25);
+}
+
+TEST_CASE("Construct from socketcan CanFrame with wrong ID throws")
+{
+  can_frame raw;
+  memset(&raw, 0, sizeof(raw));
+  raw.can_id = 100;
+  raw.can_dlc = 1;
+
+  REQUIRE_THROWS(fake_vehicle_can::SteeringFeedback{polymath::socketcan::CanFrame{raw}});
 }
 
 // ============================================================================
