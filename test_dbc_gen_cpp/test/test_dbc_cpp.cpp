@@ -589,6 +589,27 @@ TEST_CASE("CANHandler Standard CAN - Basic routing")
   REQUIRE(received_value == 42);
 }
 
+TEST_CASE("CANHandler Standard CAN - Passes time stamps")
+{
+  using fake_vehicle_can::SteeringFeedback;
+
+  dbc_gen_cpp::CANHandler handler;
+  std::chrono::steady_clock::time_point received_receive_time{};
+  std::chrono::system_clock::time_point received_bus_time{};
+
+  handler.set_handler<SteeringFeedback>([&](const SteeringFeedback & msg) {
+    received_receive_time = msg.receive_time;
+    received_bus_time = msg.bus_time;
+  });
+
+  const auto receive_time = std::chrono::steady_clock::time_point{std::chrono::seconds{5}};
+  const auto bus_time = std::chrono::system_clock::time_point{std::chrono::seconds{7}};
+
+  REQUIRE(handler.handle(SteeringFeedback{42}, receive_time, bus_time));
+  REQUIRE(received_receive_time == receive_time);
+  REQUIRE(received_bus_time == bus_time);
+}
+
 TEST_CASE("CANHandler Standard CAN - Multiple handlers")
 {
   using fake_vehicle_can::Heartbeat;

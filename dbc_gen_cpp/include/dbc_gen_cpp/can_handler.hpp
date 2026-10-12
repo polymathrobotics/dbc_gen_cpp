@@ -5,6 +5,7 @@
 
 #include <linux/can.h>
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -40,13 +41,18 @@ public:
 
   /// @brief Route a can frame to the appropriate handler, if registered
   /// @param frame
+  /// @param receive_time Copied to the message; defaults to the epoch.
+  /// @param bus_time Copied to the message; defaults to the epoch.
   /// @return true if there was a registered handler that was called
-  bool handle(const can_frame & frame) const
+  bool handle(
+    const can_frame & frame,
+    std::chrono::steady_clock::time_point receive_time = {},
+    std::chrono::system_clock::time_point bus_time = {}) const
   {
     // Standard CAN: exact ID match
     auto it = handlers_.find(frame.can_id);
     if (it != handlers_.end()) {
-      it->second->invoke(frame);
+      it->second->invoke(frame, receive_time, bus_time);
       return true;
     }
 
@@ -55,7 +61,7 @@ public:
       uint32_t pgn = extractPgn(frame.can_id);
       auto j1939_it = j1939_handlers_.find(pgn);
       if (j1939_it != j1939_handlers_.end()) {
-        j1939_it->second->invoke(frame);
+        j1939_it->second->invoke(frame, receive_time, bus_time);
         return true;
       }
     }
@@ -83,7 +89,8 @@ private:
   struct ICanMessageHandler
   {
     virtual ~ICanMessageHandler() = default;
-    virtual void invoke(const can_frame &) const = 0;
+    virtual void invoke(
+      const can_frame &, std::chrono::steady_clock::time_point, std::chrono::system_clock::time_point) const = 0;
   };
 
   /// @brief Concrete instantiation of the handler interface for a given message type
@@ -97,9 +104,12 @@ private:
     : callback(std::move(cb))
     {}
 
-    void invoke(const can_frame & frame) const override
+    void invoke(
+      const can_frame & frame,
+      std::chrono::steady_clock::time_point receive_time,
+      std::chrono::system_clock::time_point bus_time) const override
     {
-      callback(T(frame));
+      callback(T(frame, receive_time, bus_time));
     }
   };
 
