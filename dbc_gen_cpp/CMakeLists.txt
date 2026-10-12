@@ -13,7 +13,6 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
-find_package(socketcan_adapter REQUIRED)
 
 ament_python_install_package(${PROJECT_NAME}
   SCRIPTS_DESTINATION bin
@@ -24,7 +23,6 @@ target_include_directories(${PROJECT_NAME} INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
 )
-target_link_libraries(${PROJECT_NAME} INTERFACE socketcan_adapter::socketcan_adapter)
 
 install(
   TARGETS ${PROJECT_NAME}
@@ -52,7 +50,6 @@ if(BUILD_TESTING)
 endif()
 
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
-ament_export_dependencies(socketcan_adapter)
 ament_package(
   CONFIG_EXTRAS "dbc_gen_cpp-extras.cmake"
 )

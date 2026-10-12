@@ -9,7 +9,6 @@
 #include <cstdint>
 #include <stdexcept>
 
-#include "socketcan_adapter/can_frame.hpp"
 #include "{{ library_name }}/{{ c_header }}"
 
 namespace {{ library_name }}
@@ -110,12 +109,15 @@ struct {{ message.name }}
     {% endif %}
   }
 
-  // Constructor from socketcan CanFrame, keeps its time stamps
-  explicit {{ message.name }}(const polymath::socketcan::CanFrame & frame)
-  : {{ message.name }}(frame.get_frame())
+  // Constructor from can_frame with time stamps
+  {{ message.name }}(
+    const can_frame & frame,
+    std::chrono::steady_clock::time_point receive_time,
+    std::chrono::system_clock::time_point bus_time)
+  : {{ message.name }}(frame)
   {
-    receive_time = frame.get_receive_time();
-    bus_time = frame.get_bus_time();
+    this->receive_time = receive_time;
+    this->bus_time = bus_time;
   }
 
   // Conversion operator to can_frame
