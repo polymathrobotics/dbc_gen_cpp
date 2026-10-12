@@ -39,6 +39,18 @@ my_can_socket->send(frame);
 
 ```
 
+### Time Stamps
+
+Each message carries `receive_time` (`std::chrono::steady_clock`) and `bus_time` (`std::chrono::system_clock`), both default to the epoch.
+
+Constructing a message from a `can_frame` and both time stamps decodes the frame and stores the time stamps.
+
+```c++
+my_can_library_name::MessageName message{frame, receive_time, bus_time};
+message.receive_time;
+message.bus_time;
+```
+
 ### Signal Value Maps (Enums)
 
 DBC value tables (`VAL_` lines, and the global `VAL_TABLE_`) map raw signal values

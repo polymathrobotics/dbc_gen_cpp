@@ -5,6 +5,7 @@
 
 #include <linux/can.h>
 
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 
@@ -54,6 +55,10 @@ struct {{ message.name }}
   }
   {% endif %}
 
+  // Time stamps
+  std::chrono::steady_clock::time_point receive_time{};
+  std::chrono::system_clock::time_point bus_time{};
+
   // Signals
   {% for signal in message.signals %}
   double {{ signal.name }};
@@ -102,6 +107,17 @@ struct {{ message.name }}
     {{ signal.name }} = {{ message.struct_name }}_{{ signal.name }}_decode(unpacked.{{ signal.name }});
     {% endfor %}
     {% endif %}
+  }
+
+  // Constructor from can_frame with time stamps
+  {{ message.name }}(
+    const can_frame & frame,
+    std::chrono::steady_clock::time_point receive_time,
+    std::chrono::system_clock::time_point bus_time)
+  : {{ message.name }}(frame)
+  {
+    this->receive_time = receive_time;
+    this->bus_time = bus_time;
   }
 
   // Conversion operator to can_frame
